@@ -1,12 +1,12 @@
 # Scrapy settings for parsing_search project
-#
+import random
 # For simplicity, this file contains only settings considered important or
 # commonly used. You can find more settings consulting the documentation:
 #
 #     https://docs.scrapy.org/en/latest/topics/settings.html
 #     https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
 #     https://docs.scrapy.org/en/latest/topics/spider-middleware.html
-
+#RETRY_TIMES = 2
 BOT_NAME = 'parsing_search'
 
 SPIDER_MODULES = ['parsing_search.spiders']
@@ -30,10 +30,14 @@ USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 13_3_1 like Mac OS X) AppleWebK
 #}
 # Obey robots.txt rules
 ROBOTSTXT_OBEY = False
-DOWNLOAD_DELAY = 10
+
+REDIRECT_MAX_TIMES = 1
+CONCURRENT_REQUESTS = 20
+DOWNLOAD_DELAY = random.randrange(5, 12)
+DOWNLOAD_TIMEOUT = 30
 # Configure maximum concurrent requests performed by Scrapy (default: 16)
 #CONCURRENT_REQUESTS = 32
-
+#RETRY_HTTP_CODES = [500, 503, 504, 400, 403, 404, 408]
 # Configure a delay for requests for the same website (default: 0)
 # See https://docs.scrapy.org/en/latest/topics/settings.html#download-delay
 # See also autothrottle settings and docs
@@ -43,11 +47,19 @@ DOWNLOAD_DELAY = 10
 #CONCURRENT_REQUESTS_PER_IP = 16
 
 # Disable cookies (enabled by default)
-COOKIES_ENABLED = True
+COOKIES_ENABLED = False
 
 # Disable Telnet Console (enabled by default)
 #TELNETCONSOLE_ENABLED = False
+DOWNLOADER_MIDDLEWARES = {
+    #'scrapy.downloadermiddlewares.retry.RetryMiddleware': 90,
+    'scrapy_proxies.RandomProxy': 100,
+    'scrapy.downloadermiddlewares.httpproxy.HttpProxyMiddleware': 110,
+    'parsing_search.middlewares.ParsingSearchDownloaderMiddleware': 111
+}
 
+PROXY_LIST = '/home/timur/WORK/progect_search/src/parsing_search/parsing_search/proxy.txt'
+PROXY_MODE = 0
 # Override the default request headers:
 #DEFAULT_REQUEST_HEADERS = {
 #   'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',

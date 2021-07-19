@@ -2,11 +2,15 @@
 #
 # See documentation in:
 # https://docs.scrapy.org/en/latest/topics/spider-middleware.html
-
+from scrapy.downloadermiddlewares.redirect import BaseRedirectMiddleware
+from scrapy.exceptions import IgnoreRequest
 from scrapy import signals
+from urllib.parse import urljoin, urlparse
+from w3lib.url import safe_url_string
+import re
 
-# useful for handling different item types with a single interface
-from itemadapter import is_item, ItemAdapter
+from parsing_search.user_agents import USER_AAGENTS
+import random
 
 
 class ParsingSearchSpiderMiddleware:
@@ -78,6 +82,8 @@ class ParsingSearchDownloaderMiddleware:
         # - or return a Request object
         # - or raise IgnoreRequest: process_exception() methods of
         #   installed downloader middleware will be called
+
+
         return None
 
     def process_response(self, request, response, spider):
@@ -87,6 +93,9 @@ class ParsingSearchDownloaderMiddleware:
         # - return a Response object
         # - return a Request object
         # - or raise IgnoreRequest
+        if response.status != 200:
+            raise IgnoreRequest(response.status)
+
         return response
 
     def process_exception(self, request, exception, spider):
@@ -97,7 +106,48 @@ class ParsingSearchDownloaderMiddleware:
         # - return None: continue processing this exception
         # - return a Response object: stops process_exception() chain
         # - return a Request object: stops process_exception() chain
+
         pass
 
     def spider_opened(self, spider):
         spider.logger.info('Spider opened: %s' % spider.name)
+
+
+class DataEaterRedirectMiddleware(BaseRedirectMiddleware):
+    """
+    Handle redirection of requests based on response status
+    and meta-refresh html tag.
+    """
+    pattern = re.compile(r'showcaptcha')
+
+    def process_response(self, request, response, spider):
+        if (
+                request.meta.get('dont_redirect', False)
+                or response.status in getattr(spider, 'handle_httpstatus_list', [])
+                or response.status in request.meta.get('handle_httpstatus_list', [])
+                or request.meta.get('handle_httpstatus_all', False)
+        ):
+            return response
+
+        allowed_status = (301, 302, 303, 307, 308)
+        if 'Location' not in response.headers or response.status not in allowed_status:
+            return response
+
+        if self.pattern.search(response.url):
+            request.priority = -100
+            return request
+
+        location = safe_url_string(response.headers['Location'])
+        if response.headers['Location'].startswith(b'//'):
+            request_scheme = urlparse(request.url).scheme
+            location = request_scheme + '://' + location.lstrip('/')
+
+        redirected_url = urljoin(request.url, location)
+
+        if response.status in (301, 307, 308) or request.method == 'HEAD':
+            redirected = request.replace(url=redirected_url)
+            return self._redirect(redirected, request, spider, response.status)
+
+        redirected = self._redirect_request_using_get(request, redirected_url)
+
+        return self._redirect(redirected, request, spider, response.status)
